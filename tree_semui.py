@@ -1,6 +1,4 @@
-import sqlite3
-from database import setup
-
+from collections import deque
 
 class Node_diretorio:
     def __init__(self, nome):
@@ -11,64 +9,9 @@ class Node_diretorio:
 
 class sistema_arquivo:
     def __init__(self):
-        setup()
-        self.conn = sqlite3.connect('sistema_arquivos.db')
-
         self.raiz = Node_diretorio('/')
         self.atual = self.raiz
         self.historico = []
-
-    def save_to_database(self):
-        cursor = self.conn.cursor()
-        cursor.execute('DELETE FROM directories')
-        cursor.execute('DELETE FROM files')
-        self._save_directory(self.raiz, None, cursor)
-        self.conn.commit()
-
-    def _save_directory(self, directory, parent_id, cursor):
-        cursor.execute(
-            'INSERT INTO directories (name, parent_id) VALUES (?, ?)', (directory.nome, parent_id))
-        directory_id = cursor.lastrowid
-
-        for file in directory.arquivos:
-            cursor.execute(
-                'INSERT INTO files (name, directory_id) VALUES (?, ?)', (file, directory_id))
-
-        for subdirectory in directory.sub_diretorios:
-            self._save_directory(subdirectory, directory_id, cursor)
-
-    def load_from_database(self):
-        cursor = self.conn.cursor()
-        cursor.execute('SELECT * FROM directories')
-        rows = cursor.fetchall()
-        self.raiz = self._load_directory(rows, None, cursor)
-
-    def _load_directory(self, rows, parent_id, cursor):
-        directories = [row for row in rows if row[2] == parent_id]
-        directory_objects = []
-
-        for directory_row in directories:
-            directory = Node_diretorio(directory_row[1])
-            directory_objects.append(directory)
-
-            subdirectories = self._load_directory(
-                rows, directory_row[0], cursor)
-            directory.sub_diretorios.extend(subdirectories)
-
-            cursor.execute(
-                'SELECT name FROM files WHERE directory_id = ?', (directory_row[0],))
-            files = cursor.fetchall()
-            directory.arquivos.extend([file[0] for file in files])
-
-        return directory_objects
-
-    # Include other methods...
-
-    def close_connection(self):
-        self.conn.close()
-
-# Your other class and method definitions...
-
 
     def ls(self):
         """
@@ -122,22 +65,17 @@ class sistema_arquivo:
         função para criar pasta no diretorio atual ou especificando um caminho
         """
         if nivel == 2:
-            caracter_especial = ['!', '@', '#', '$', '%', '^', '&', '*',
-                                 '(', ')', '+', '-', '=', '{', '}', '[', ']', '|', ';', ':', "'", '"', ',', '.', '<', '>', '/', '?']
+            caracter_especial = ['!', '@', '#', '$', '%', '^', '&', '*','(', ')', '+', '-', '=', '{', '}', '[', ']', '|', ';', ':', "'", '"', ',', '.', '<', '>', '/', '?']
             if any(caracter in nome_pasta for caracter in caracter_especial):
-                print(
-                    'Nome de pasta não pode conter caracteres especiais. Exemplo: ! @ # / : >')
+                print('Nome de pasta não pode conter caracteres especiais. Exemplo: ! @ # / : >')
             elif nome_pasta:
                 novo_diretorio = Node_diretorio(nome_pasta)
                 self.atual.sub_diretorios.append(novo_diretorio)
-                print('Pasta {} criada com sucesso em {}'.format(
-                    nome_pasta, self.atual.nome))
+                print('Pasta {} criada com sucesso em {}'.format(nome_pasta, self.atual.nome))
         elif nivel == 3:
-            caracter_especial = ['!', '@', '#', '$', '%', '^', '&', '*',
-                                 '(', ')', '+', '-', '=', '{', '}', '[', ']', '|', ';', ':', "'", '"', ',', '.', '<', '>', '/', '?']
+            caracter_especial = ['!', '@', '#', '$', '%', '^', '&', '*','(', ')', '+', '-', '=', '{', '}', '[', ']', '|', ';', ':', "'", '"', ',', '.', '<', '>', '/', '?']
             if any(caracter in nome_pasta for caracter in caracter_especial):
-                print(
-                    'Nome de pasta não pode conter caracteres especiais. Exemplo: ! @ # / : >')
+                print('Nome de pasta não pode conter caracteres especiais. Exemplo: ! @ # / : >')
             elif dir:
                 partes = dir.split('/')
                 diretorio_atual = self.raiz
@@ -153,8 +91,7 @@ class sistema_arquivo:
                         return
                 novo_diretorio = Node_diretorio(nome_pasta)
                 diretorio_atual.sub_diretorios.append(novo_diretorio)
-                print('Pasta {} criada com sucesso em {}'.format(
-                    nome_pasta, diretorio_atual.nome))
+                print('Pasta {} criada com sucesso em {}'.format(nome_pasta, diretorio_atual.nome))
             else:
                 print('Caminho não especificado')
 
@@ -204,90 +141,87 @@ class sistema_arquivo:
             print('Arquivo não encontrado: {}'.format(nome_arquivo))
 
     def print_tree(self, node, prefix=""):
-        result = ""
+        """
+        função para printar toda arvore
+        """
         for subdir in node.sub_diretorios:
-            result += prefix + "\n|-- " + subdir.nome + "/\n"
-            result += self.print_tree(subdir, prefix + "|   ")
+            print(prefix + "|-- " + subdir.nome + "/")
+            self.print_tree(subdir, prefix + "|   ")
         for arquivo in node.arquivos:
-            result += prefix + "|-- " + arquivo + "\n"
-        return result
+            print(prefix + "|-- " + arquivo)
 
     def tree(self):
         print(self.atual.nome, '/')
         self.print_tree(self.atual)
 
-    def execute_command(self, comando):
-        output = []
 
+# Criando pasta mas mudar para outro arquivo para organizar
+sistema = sistema_arquivo()
+docs = Node_diretorio('Documentos')
+img = Node_diretorio('Imagens')
+sistema.raiz.sub_diretorios.extend([docs, img])
+
+# Criando arquivos
+docs.arquivos = ['doc1.txt', 'doc2.txt']
+img.arquivos = ['img.txt', 'img2.txt']
+
+
+if __name__ == "__main__":
+    print('Digite help para ver os comandos.')
+    while True:
+        comando = input('$ {} '.format(sistema.atual.nome))
         if comando == 'ls':
-            output.append('\nConteúdo de ' + self.atual.nome)
-            for subdiretorio in self.atual.sub_diretorios:
-                output.append('{}/ (diretorio)'.format(subdiretorio.nome))
-            for arquivo in self.atual.arquivos:
-                output.append('arquivo: {}'.format(arquivo))
+            sistema.ls()
 
         elif comando.startswith('cd'):
             partes = comando.split()
             if len(partes) == 2:
-                self.cd(partes[1].capitalize())
-                output.append('\nMudou para diretório {}'.format(partes[1]))
+                sistema.cd(partes[1].capitalize())
             else:
-                output.append('Uso: cd <diretorio>')
+                print('Uso: cd <diretorio>')
 
         elif comando.startswith('mkdir'):
             partes = comando.split()
             if len(partes) == 2:
-                self.mkdir(partes[1].capitalize(), None, 2)
+                sistema.mkdir(partes[1].capitalize(),None,2)
             elif len(partes) == 3:
-                self.mkdir(partes[1].capitalize(),
-                           partes[2].capitalize(), 3)
+                sistema.mkdir(partes[1].capitalize(),partes[2].capitalize(),3)
             else:
-                output.append('Uso: mkdir <nome da pasta>')
+                print('Uso: mkdir <nome da pasta> ou mkdir <nome da pasta> <nome do diretorio que quer inserir>')
 
         elif comando.startswith('touch'):
             partes = comando.split()
             if len(partes) == 2:
-                self.touch(partes[1].capitalize())
+                sistema.touch(partes[1].capitalize())
             else:
-                output.append('Uso: touch <nome do arquivo>')
+                print('Uso: touch <nome do arquivo>')
 
         elif comando.startswith('mv'):
             partes = comando.split()
             if len(partes) == 3:
-                self.mv(partes[1].capitalize(),
-                        partes[2].capitalize())
+                sistema.mv(partes[1].capitalize(), partes[2].capitalize())
+                pass
             else:
-                output.append(
+                print(
                     'Uso: mv <nome do arquivo que quer alterar>  <nome do novo arquivo>')
 
         elif comando.startswith('rm'):
             partes = comando.split()
             if len(partes) == 2:
-                self.rm(partes[1].capitalize())
+                sistema.rm(partes[1].capitalize())
             else:
-                output.append('Uso: rm <nome do arquivo que quer excluir>')
+                print('Uso: rm <nome do arquivo que quer excluir>')
 
         elif comando == 'tree':
-            output.append(self.print_tree(self.atual, ''))
+            sistema.tree()
 
         elif comando == 'help':
-            output.append("\nComandos:")
-            output.append("ls | cd | mkdir | touch | mv | rm | tree | exit")
+            print("Comandos:")
+            print("ls | cd | mkdir | touch | mv | rm | tree | exit")
 
         elif comando == 'exit':
-            output.append('Saindo do sistema')
-            return output, True
+            print('Saindo do sistema')
+            break
 
         else:
             pass
-
-        return "\n".join(output), False
-
-    def run(self, sistema):
-        print('Digite help para ver os comandos.')
-        while True:
-            comando = input('$ {} '.format(sistema.atual.nome))
-            output, should_exit = self.execute_command(comando)
-            print(output)
-            if should_exit:
-                break
